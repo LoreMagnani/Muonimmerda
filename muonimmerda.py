@@ -1,4 +1,4 @@
-import numpy as np
+
 import ROOT
 import matplotlib.pyplot as plt
 from odf.opendocument import load
