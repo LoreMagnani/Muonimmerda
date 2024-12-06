@@ -8,6 +8,8 @@ from odf import text
 import ctypes
 import pandas as pd
 
+# Usa pandas per prendere dal file excel i dati (ascisse, ordinate, nome del rivelatore e voltaggio)
+# Versione per chi usa windows
 def trova_dati(file_path, start_row, end_row, column_index, page_name):
     """
     Legge i dati da un foglio Excel e restituisce soglie, counts, il nome del rivelatore e il voltaggio.
@@ -25,26 +27,33 @@ def trova_dati(file_path, start_row, end_row, column_index, page_name):
             - counts (pandas.Series): I valori della colonna specificata tra le righe specificate.
             - nome_rivelatore (str): Il nome del rivelatore trovato 3 righe sopra la riga di partenza.
             - voltaggio (str): Il voltaggio trovato 2 righe sopra la riga di partenza.
-    """
+    """    
     # Leggi il foglio specificato
-    df = pd.read_excel(file_path, sheet_name=page_name, header=None)
-    
+    df = pd.read_excel(file_name, engine='odf', sheet_name=page_name, header=None)
+
     # Conversione da 1-based Excel a 0-based Python
     start_idx = start_row - 1
     end_idx = end_row - 1
-    col_idx = column_index - 1
-    
+    col_idx = column_index
+
     # Estrai il nome del rivelatore e il voltaggio
     nome_rivelatore = df.iloc[start_idx - 3, col_idx]
-    voltaggio = df.iloc[start_idx - 2, col_idx]
-    
+    voltaggio = f"{df.iloc[start_idx - 2, col_idx]}"
+
     # Estrai le soglie (colonna A) e i counts (colonna specificata)
     soglie = pd.to_numeric(df.iloc[start_idx:end_idx + 1, 0], errors='coerce')
     counts = pd.to_numeric(df.iloc[start_idx:end_idx + 1, col_idx], errors='coerce')
-    
+
+    # Filtra i valori validi: elimina i punti con NaN in counts
+    valid_mask = ~counts.isna()  # Boolean mask: True per valori validi
+    soglie = soglie[valid_mask].reset_index(drop=True)  # Filtra soglie
+    counts = counts[valid_mask].reset_index(drop=True)  # Filtra counts
+
     # Restituisci i dati richiesti
     return soglie, counts, nome_rivelatore, voltaggio
 
+# Usa pandas per prendere dal file excel (formato ods) i dati (ascisse, ordinate, nome del rivelatore e voltaggio)
+# Versione per chi usa linux
 def trova_dati_per_il_coglione_con_linux(file_name, start_row, end_row, column_index, page_name):
     """
     Legge i dati da un file .ods e restituisce soglie, counts, il nome del rivelatore e il voltaggio.
@@ -65,29 +74,40 @@ def trova_dati_per_il_coglione_con_linux(file_name, start_row, end_row, column_i
     """
     # Leggi il foglio specificato
     df = pd.read_excel(file_name, engine='odf', sheet_name=page_name, header=None)
-    
+
     # Conversione da 1-based Excel a 0-based Python
     start_idx = start_row - 1
     end_idx = end_row - 1
-    col_idx = column_index - 1
-    
+    col_idx = column_index
+
     # Estrai il nome del rivelatore e il voltaggio
     nome_rivelatore = df.iloc[start_idx - 3, col_idx]
-    voltaggio = f"{df.iloc[start_idx - 2, col_idx]} + V"
-    
+    voltaggio = f"{df.iloc[start_idx - 2, col_idx]}"
+
     # Estrai le soglie (colonna A) e i counts (colonna specificata)
     soglie = pd.to_numeric(df.iloc[start_idx:end_idx + 1, 0], errors='coerce')
     counts = pd.to_numeric(df.iloc[start_idx:end_idx + 1, col_idx], errors='coerce')
-    
+
+    # Filtra i valori validi: elimina i punti con NaN in counts
+    valid_mask = ~counts.isna()  # Boolean mask: True per valori validi
+    soglie = soglie[valid_mask].reset_index(drop=True)  # Filtra soglie
+    counts = counts[valid_mask].reset_index(drop=True)  # Filtra counts
+
     # Restituisci i dati richiesti
     return soglie, counts, nome_rivelatore, voltaggio
 
+
+# Define a constant function for the fit
+def a_fit(x, a):
+    return a
+
+# Stampa un plot per ogni voltaggio per un dato rivelatore
 def solo_plot(soglie, counts, nome_rivelatore, volt):
     # Creazione della figura con matplotlib
     plt.figure(figsize=(10, 6))
 
     # Plot dei punti originali usando soglie come coordinate x
-    plt.plot(counts, soglie, 'o', label='Punti Originali', color='black')
+    plt.plot(soglie, counts, 'o', label='Punti Originali', color='black')
 
     # Etichette e titolo
     if volt is not None:
@@ -107,6 +127,7 @@ def solo_plot(soglie, counts, nome_rivelatore, volt):
     plt.close()
     print(f"Grafico salvato come immagine: {output_filename}")
 
+# Stampa fit con retta orizzontale per ogni voltaggio di un dato rivelatore
 def fit_plateau(soglie, counts, nome_rivelatore, volt, lungo):
     if len(counts) < lungo:
         raise ValueError("Non ci sono abbastanza dati validi per trovare un plateau.")
@@ -128,20 +149,20 @@ def fit_plateau(soglie, counts, nome_rivelatore, volt, lungo):
             window = np.array(counts[start:end + 1])
             x_data = x_coords[start:end + 1]
 
+            # Esegue il fit
             try:
-                # Fit con una costante
                 popt, _ = curve_fit(a_fit, x_data, window)
-                a_fit = popt[0]
-                residuals = window - a_fit
+                a_fit_value = popt[0]
+                residuals = window - a_fit_value
                 chi_squared = np.sum((residuals) ** 2) / len(residuals)
 
-                # Se il chi-quadro è migliore, aggiorna i parametri
+                # Se il Chi quadro è migliore, aggiorna i parametri
                 if chi_squared < best_chi_squared:
                     best_chi_squared = chi_squared
                     best_start = start
                     best_end = end
             except RuntimeError:
-                continue  # Se il fit fallisce, passa al prossimo intervallo
+                continue  # Se fallisce passa al prossimo intervallo
 
     # Dati del plateau trovato
     plateau_x = x_coords[best_start:best_end + 1]
@@ -216,7 +237,8 @@ def fit_plateau(soglie, counts, nome_rivelatore, volt, lungo):
     # Chiude il canvas per evitare conflitti
     canvas.Close()
 
-def unicum(num_graphs, file_path, start_row, end_row, page_name):
+# Stampa fit con retta orizzontale per ogni voltaggio di un dato rivelatore
+def UniCum(num_graphs, file_path, start_row, end_row, page_name):
     fig, ax = plt.subplots(figsize=(8, 6))
     colors = plt.cm.tab10  # Tavolozza di colori con 10 colori predefiniti
     

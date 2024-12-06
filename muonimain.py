@@ -15,6 +15,7 @@ if __name__ == "__main__":
     parser.add_argument("start_row", type=int, help="Numero di riga iniziale (es. 43)")
     parser.add_argument("end_row", type=int, help="Numero di riga finale (es. 54)")
     parser.add_argument("--plateau", action="store_true", help="Impostare se vuoi fittare il plateau") 
+    parser.add_argument("--unico", action="store_true", help="Impostare se vuoi fit nello stesso grafico") 
     parser.add_argument("--lungo", type=int, default=4, help="Lunghezza minima plateau (default: 4)")
 
     args = parser.parse_args()
@@ -28,7 +29,7 @@ if __name__ == "__main__":
     num_graphs = args.num_graphs
     plateau = args.plateau
     lungo = args.lungo
-
+    UniCum = args.unico
 
     for i in range(1, num_graphs + 1):
         # Prende le variabili principali
@@ -36,9 +37,15 @@ if __name__ == "__main__":
             soglie, counts, nome_rivelatore, voltaggio = muonimerde.trova_dati_per_il_coglione_con_linux(file_path, start_row, end_row, i, page_name)
         else:
             soglie, counts, nome_rivelatore, voltaggio = muonimerde.trova_dati_odf(file_path, start_row, end_row, i, page_name)
+        
+        # DEBUG Stampa soglie e counts
+        #print(soglie)
+        #print(counts)
 
         if plateau:
-            muonimerde.fit_plateau()
+            muonimerde.fit_plateau(soglie, counts, nome_rivelatore, voltaggio, lungo)
+        elif UniCum:
+            muonimerde.UniCum(num_graphs, file_path, start_row, end_row, page_name)
         else:
             # Fa solo il plot
             muonimerde.solo_plot(soglie, counts, nome_rivelatore, voltaggio)
