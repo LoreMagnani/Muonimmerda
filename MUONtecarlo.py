@@ -39,7 +39,7 @@ for i in range(N):
     # Verifica che questa traiettoria intersechi tutti e 3 i rivelatori (profondità 20cm, sommando spessori e spazi)
     x_fondo = x - 20*np.sin(polar)*np.cos(azimut)
     y_fondo = y - 20*np.sin(polar)*np.sin(azimut)
-    z_fondo = z - 20*np.cos(azimut)
+    z_fondo = 20*np.cos(azimut)
 
     if x_fondo < 0 or x_fondo > 80 or y_fondo < 0 or y_fondo > 30:
         continue
