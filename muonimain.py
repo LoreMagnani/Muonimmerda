@@ -28,7 +28,7 @@ if __name__ == "__main__":
     end_row = args.end_row 
     num_graphs = args.num_graphs
     plateau = args.plateau
-    lungo = args.lungo
+    lungo = args.lungo - 1
     UniCum = args.unico
 
     for i in range(1, num_graphs + 1):
@@ -36,9 +36,9 @@ if __name__ == "__main__":
         if l:
             soglie, counts, nome_rivelatore, voltaggio = muonimerde.trova_dati_per_il_coglione_con_linux(file_path, start_row, end_row, i, page_name)
         else:
-            soglie, counts, nome_rivelatore, voltaggio = muonimerde.trova_dati_odf(file_path, start_row, end_row, i, page_name)
+            soglie, counts, nome_rivelatore, voltaggio = muonimerde.trova_dati(file_path, start_row, end_row, i, page_name)
         
-        # DEBUG Stampa soglie e counts
+        ## DEBUG Stampa soglie e counts
         #print(soglie)
         #print(counts)
 
