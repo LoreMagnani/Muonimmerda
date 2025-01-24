@@ -49,4 +49,5 @@ if __name__ == "__main__":
         else:
             # Fa solo il plot
             muonimerde.solo_plot(soglie, counts, nome_rivelatore, voltaggio)
+
             
