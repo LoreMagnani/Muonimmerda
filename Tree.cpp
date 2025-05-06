@@ -87,6 +87,7 @@ int ProcessTree(const string &xmlFileName , const string &xmlFolder , const stri
         int* vector1 = new int[recordlength];
         int* vector2 = new int[recordlength];
         int* vector3 = new int[recordlength];
+        int clocktime;
 
         // Creazione dei rami dell'albero
         tree->Branch("EventId", &index);
@@ -94,12 +95,14 @@ int ProcessTree(const string &xmlFileName , const string &xmlFolder , const stri
         tree->Branch("Channel1", vector1, "Channel1[4096]/I");
         tree->Branch("Channel2", vector2, "Channel2[4096]/I");
         tree->Branch("Channel3", vector3, "Channel3[4096]/I");
+        tree->Branch("EventTime", &clocktime);
 
         // Espressioni regolari per analizzare l'XML
         TPRegexp r_event_open("<event id=\"([0-9]+)\".*");
         TPRegexp r_event_close("</event>");
         TPRegexp r_channel_open("^\\s*<trace channel=\"([0-4])\">(.*)");
         TPRegexp r_channel_close("\\s*</trace>");
+        TPRegexp r_event_time("clocktime=\"([0-9]+)\"");
 
         while (getline(file, line))
         {
@@ -109,7 +112,17 @@ int ProcessTree(const string &xmlFileName , const string &xmlFolder , const stri
             TObjArray* obj_array = r_event_open.MatchS(line);
             TObjString* obj_string = (TObjString*)obj_array->At(1);
             index = atoi(obj_string->GetString().Data());
+            delete obj_array;
             //cout << "Event " << index << endl;
+
+            TObjArray* clock_array = r_event_time.MatchS(line);
+            if (clock_array && clock_array->GetEntriesFast() > 1) {
+                TObjString* clock_str = (TObjString*)clock_array->At(1);
+                clocktime = atoll(clock_str->GetString().Data());
+            } else {
+                clocktime = 0;
+            }
+            delete clock_array;
 
             // Inizializza gli array a zero per ogni evento
             for (int j = 0; j < recordlength; j++) {
