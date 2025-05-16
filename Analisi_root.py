@@ -15,8 +15,8 @@ _active_panels   = []
 
 
 # Funzione di fit esponenziale (se serve altrove)
-def exp_func(x, par):
-    return par[0] * np.exp(-x / par[1]) + par[2]
+def d_exp_func(x, par):
+    return par[0] * np.exp(-x / par[1]) + par[2] + par[3] * np.exp(-x / par[4])
 
 # Processa un singolo file ROOT e restituisce le differenze
 def process_file_diffs(filepath):
@@ -64,17 +64,25 @@ def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params):
     for val in diff:
         hist.Fill(val)
 
-    # Definisci funzione di fit
-    fit_func = ROOT.TF1(f"fit_{tipo}", "[0]*exp(-x/[1])+[2]", 0, x_max)
-    if fit_params['auto']:
-        fit_func.SetParameters(hist.GetMaximum(), fit_params['tau'], fit_params['b'])
-    else:
-        fit_func.SetParameters(fit_params['a'], fit_params['tau'], fit_params['b'])
+    # Definizione delle due funzioni di fit
+    fit_3p = ROOT.TF1(f"fit3_{tipo}", "[0]*exp(-x/[1]) + [2]", 0, x_max)
+    fit_3p.SetParName(0, "a")
+    fit_3p.SetParName(1, "#tau")
+    fit_3p.SetParName(2, "b")
+    fit_3p.SetParameters( fit_params['a'], fit_params['tau'], fit_params['b'] )
 
-    # Fitting dal bin di start
-    fit_start = hist.GetBinLowEdge(start_bin)
-    fit_func.SetRange(fit_start, x_max)
-    hist.Fit(fit_func, "RL")
+    fit_5p = ROOT.TF1(f"fit5_{tipo}", "[0]*exp(-x/[1]) + [2] + [3]*exp(-x/[4])", 0, x_max)
+    fit_5p.SetParName(0, "B")
+    fit_5p.SetParName(1, "#tau_{free}")
+    fit_5p.SetParName(2, "A")
+    fit_5p.SetParName(3, "C")
+    fit_5p.SetParName(4, "#tau_{NaCl}")
+    fit_5p.SetParameters( fit_params['B'], fit_params['#tau_{free}'], fit_params['A'], fit_params['C'], fit_params['#tau_{NaCl}'] )
+
+    ## Fitting dal bin di start
+    #fit_start = hist.GetBinLowEdge(start_bin)
+    #fit_func.SetRange(fit_start, x_max)
+    #hist.Fit(fit_func, "RL")
 
     # Disegna su canvas
     c = ROOT.TCanvas(f"c_{tipo}", f"Fit {tipo}", 800, 600)
@@ -82,34 +90,47 @@ def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params):
     hist.GetYaxis().SetTitle("Counts")
     hist.SetFillColorAlpha(ROOT.kBlue-7, 0.35)
     hist.Draw("HIST")
-    fit_func.SetLineColor(ROOT.kRed)
-    fit_func.Draw("SAME")
 
-    # 1) Memorizzo in una struttura globale
-    _active_canvases.append(c)
-    _active_canvases.append(hist)
-    _active_canvases.append(fit_func)
+    #fit_3p.SetLineColor(ROOT.kRed+1)
+    #fit_5p.SetLineColor(ROOT.kGreen+2)
+    #fit_3p.Draw("SAME")
+    #fit_5p.Draw("SAME")
 
+    # Panel interattivo senza fit automatico
+    panel = hist.FitPanel()
 
-    # 2) Apro il pannello interattivo e lo salvo anch’esso
-    panel = hist.FitPanel()  
+    # Memorizzazione globale
+    _active_canvases.extend([c, hist, fit_3p, fit_5p])
     _active_panels.append(panel)
 
-    # 3) Aggiorno il canvas
+    # Aggiorna il canvas
     c.Update()
 
-    # Parametri e legenda
-    a, tau, b     = fit_func.GetParameter(0), fit_func.GetParameter(1), fit_func.GetParameter(2)
-    sigma_a       = fit_func.GetParError(0)
-    sigma_tau     = fit_func.GetParError(1)
-    sigma_b       = fit_func.GetParError(2)
-    legend = ROOT.TLegend(0.55, 0.62, 0.88, 0.88)
-    legend.SetBorderSize(0)
-    legend.SetFillStyle(0)
-    legend.AddEntry(fit_func, f"#tau = {tau:.2f} #pm {sigma_tau:.2f} ns\n"
-                                  f"a = {a:.2f} #pm {sigma_a:.2f}\n"
-                                  f"b = {b:.2f} #pm {sigma_b:.2f}", "l")
-    legend.Draw()
+    ## 1) Memorizzo in una struttura globale
+    #_active_canvases.append(c)
+    #_active_canvases.append(hist)
+    #_active_canvases.append(fit_func)
+
+
+    ## 2) Apro il pannello interattivo e lo salvo anch’esso
+    #panel = hist.FitPanel()  
+    #_active_panels.append(panel)
+
+    ## 3) Aggiorno il canvas
+    #c.Update()
+
+    ## Parametri e legenda
+    #a, tau, b     = fit_func.GetParameter(0), fit_func.GetParameter(1), fit_func.GetParameter(2)
+    #sigma_a       = fit_func.GetParError(0)
+    #sigma_tau     = fit_func.GetParError(1)
+    #sigma_b       = fit_func.GetParError(2)
+    #legend = ROOT.TLegend(0.55, 0.62, 0.88, 0.88)
+    #legend.SetBorderSize(0)
+    #legend.SetFillStyle(0)
+    #legend.AddEntry(fit_func, f"#tau = {tau:.2f} #pm {sigma_tau:.2f} ns\n"
+    #                              f"a = {a:.2f} #pm {sigma_a:.2f}\n"
+    #                              f"b = {b:.2f} #pm {sigma_b:.2f}", "l")
+    #legend.Draw()
 
     # Salvataggio
     outdir = "./Fina_na_lfile"
@@ -162,7 +183,7 @@ def root_gui(ud, clock):
     app = ROOT.TApplication("app", 0, ctypes.c_void_p())
 
     bin_dict = {"all":{'bins':100,'start':5}, "up":{'bins':100,'start':5}, "dawn":{'bins':100,'start':5}}
-    fit_params = {'auto':True, 'a':100, 'tau':2000, 'b':5}
+    fit_params = {'auto':True, 'a':100, 'tau':2200, 'b':5 , "A":50 , "B":50 , "C":10 , "#tau_{free}":2200 , "#tau_{NaCl}":850}
 
     foc, path = scegli_f_o_c()
     if foc and path:
