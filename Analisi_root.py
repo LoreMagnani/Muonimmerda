@@ -79,8 +79,41 @@ def plot_title(nomefile, tipo):
     else:
         return 0
 
+# Normalizza fondo
+def normalizza_fondo(dati, fondo, tipo, bins, clock_dati, clock_fondo):
+    x_max = max(dati + fondo) * 1.1  # Estendi un po' oltre il massimo
+
+    # Crea istogrammi ROOT
+    hist_dati = ROOT.TH1F(f"hist_dati_{tipo}", f"Dati {tipo}", bins, 0, x_max)
+    hist_fondo = ROOT.TH1F(f"hist_fondo_{tipo}", f"Fondo {tipo}", bins, 0, x_max)
+
+    for val in dati:
+        hist_dati.Fill(val)
+    for val in fondo:
+        hist_fondo.Fill(val)
+
+    # Calcolo durata di acquisizione
+    dt_dati = max(clock_dati) - min(clock_dati)
+    dt_fondo = max(clock_fondo) - min(clock_fondo)
+
+    print(dt_dati, dt_fondo)
+
+    # Normalizza il fondo
+    scala = dt_dati / dt_fondo if dt_fondo != 0 else 0
+    hist_fondo.Scale(scala)
+
+    # Sottrai
+    hist_dati.Add(hist_fondo, -1)
+
+    # Tronca bin negativi a 0
+    for i in range(1, hist_dati.GetNbinsX() + 1):
+        if hist_dati.GetBinContent(i) < 0:
+            hist_dati.SetBinContent(i, 0)
+
+    return hist_dati
+
 # Funzione di plotting e fitting con ROOT
-def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit):
+def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit, fondo, clock_dati):
     bins      = bin_dict[tipo]['bins']
     start_bin = bin_dict[tipo]['start']
     x_max     = max(diff) * 1.1
@@ -92,9 +125,20 @@ def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit):
         hist = ROOT.TH1F(f"hist_{tipo}", titolo, bins, 0, x_max)
     else:
         hist = ROOT.TH1F(f"hist_{tipo}", f"Fit {tipo} - {nomefile}", bins, 0, x_max)
-    for val in diff:
-        hist.Fill(val)
+    if fondo:
+        accum_fondo = {'all': [], 'up': [], 'dawn': [], 'clock': []}
+        files = [os.path.join(fondo, f) for f in os.listdir(fondo) if f.lower().endswith('.root')]
+        nomefile = os.path.basename(fondo.rstrip('/\\'))
+        for fpath in files:
+            print("Elaboro fondo:", fpath)
+            diffs_fondo = process_file_diffs(fpath)
+            for t in accum_fondo: accum_fondo[t].extend(diffs_fondo[t])
 
+        hist = normalizza_fondo(diff, accum_fondo[tipo], tipo, bins, clock_dati, accum_fondo['clock'])
+    else:
+        for val in diff:
+            hist.Fill(val)
+    
     # Definizione delle due funzioni di fit
     fit_3p = ROOT.TF1(f"fit3_{tipo}", "[0]*exp(-x/[1]) + [2]", 0, x_max)
     fit_3p.SetParName(0, "a")
@@ -123,22 +167,12 @@ def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit):
     fit_5p_Al.SetParLimits(4, fit_params_limit['#tau_{Al}_inf'], fit_params_limit['#tau_{Al}_sup'])
     fit_5p_Al.SetParLimits(1, fit_params_limit['#tau_{free}_inf'], fit_params_limit['#tau_{free}_sup'])
 
-    ## Fitting dal bin di start
-    #fit_start = hist.GetBinLowEdge(start_bin)
-    #fit_func.SetRange(fit_start, x_max)
-    #hist.Fit(fit_func, "RL")
-
     # Disegna su canvas
     c = ROOT.TCanvas(f"c_{tipo}", f"Fit {tipo}", 800, 600)
     hist.GetXaxis().SetTitle("Tempo [ns]")
     hist.GetYaxis().SetTitle("Counts")
     hist.SetFillColorAlpha(ROOT.kBlue-7, 0.35)
     hist.Draw("HIST")
-
-    #fit_3p.SetLineColor(ROOT.kRed+1)
-    #fit_5p.SetLineColor(ROOT.kGreen+2)
-    #fit_3p.Draw("SAME")
-    #fit_5p.Draw("SAME")
 
     # Panel interattivo senza fit automatico
     panel = hist.FitPanel()
@@ -150,39 +184,13 @@ def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit):
     # Aggiorna il canvas
     c.Update()
 
-    ## 1) Memorizzo in una struttura globale
-    #_active_canvases.append(c)
-    #_active_canvases.append(hist)
-    #_active_canvases.append(fit_func)
-
-
-    ## 2) Apro il pannello interattivo e lo salvo anch’esso
-    #panel = hist.FitPanel()  
-    #_active_panels.append(panel)
-
-    ## 3) Aggiorno il canvas
-    #c.Update()
-
-    ## Parametri e legenda
-    #a, tau, b     = fit_func.GetParameter(0), fit_func.GetParameter(1), fit_func.GetParameter(2)
-    #sigma_a       = fit_func.GetParError(0)
-    #sigma_tau     = fit_func.GetParError(1)
-    #sigma_b       = fit_func.GetParError(2)
-    #legend = ROOT.TLegend(0.55, 0.62, 0.88, 0.88)
-    #legend.SetBorderSize(0)
-    #legend.SetFillStyle(0)
-    #legend.AddEntry(fit_func, f"#tau = {tau:.2f} #pm {sigma_tau:.2f} ns\n"
-    #                              f"a = {a:.2f} #pm {sigma_a:.2f}\n"
-    #                              f"b = {b:.2f} #pm {sigma_b:.2f}", "l")
-    #legend.Draw()
-
     # Salvataggio
     outdir = "./Fina_na_lfile"
     if not os.path.exists(outdir): os.makedirs(outdir)
     c.SaveAs(f"{outdir}/{nomefile}_{tipo}.pdf")
 
 # Funzione principale: unisce tutti i file se cartella, o singolo
-def analizza_root(path, bin_dict, fit_params, fit_params_limit, foc, plot_updown, clock):
+def analizza_root(path, bin_dict, fit_params, fit_params_limit, foc, plot_updown, clock, fondo):
     # Accumulatori globali di diff
     accum = {'all': [], 'up': [], 'dawn': [], 'clock': []}
 
@@ -207,7 +215,7 @@ def analizza_root(path, bin_dict, fit_params, fit_params_limit, foc, plot_updown
     # Ora un unico plot per ciascun tipo
     for tipo in ['all', 'up', 'dawn']:
         if tipo == 'all' or (plot_updown and tipo in ['up', 'dawn']):
-            plot_e_fit(accum[tipo], tipo, nomefile, bin_dict, fit_params, fit_params_limit)
+            plot_e_fit(accum[tipo], tipo, nomefile, bin_dict, fit_params, fit_params_limit, fondo, accum['clock'])
 
 # Dialogo utente per file o cartella
 def scegli_f_o_c():
@@ -220,7 +228,18 @@ def scegli_f_o_c():
         return 'cartella', filedialog.askdirectory()
     else:
         return None, None
-    
+
+# Dialogo utente per scegliere il fondo
+def file_fondo():
+    root = Tk(); root.withdraw()
+    s = simpledialog.askstring("Modalità", "Vuoi selezionare un fondo da sottrarre? (s/n)")
+    root.destroy()
+    if s and s.lower().startswith('s'):
+        return filedialog.askdirectory()
+    else:
+        return None
+
+# Dialogo utente per modificare i parametri prima del fit panel
 def crea_pannello_parametri(bin_dict, fit_params, fit_params_limit):
     # Finestra principale
     main = ROOT.TGMainFrame(ROOT.gClient.GetRoot(), 400, 600)
@@ -288,6 +307,8 @@ def root_gui(ud, clock):
         print("Nessuna analisi eseguita.")
         return
 
+    fondo = file_fondo()
+
     # Parametri preimpostati
     bin_dict = {"all":{'bins':100,'start':5}, "up":{'bins':100,'start':5}, "dawn":{'bins':100,'start':5}}
     fit_params = {'auto':True, 'a':100, 'b':5, "A":50, "B":50 , "C":10, "#tau_{free}":2200, "#tau_{NaCl}":850, '#tau_{Al}':880}
@@ -310,7 +331,7 @@ def root_gui(ud, clock):
                 bin_dict[dk][sk]=int(v)
 
     if foc and path:
-        analizza_root(path, bin_dict, fit_params, fit_params_limit, foc, ud, clock)
+        analizza_root(path, bin_dict, fit_params, fit_params_limit, foc, ud, clock, fondo)
         app.Run()
     else:
         print("Nessuna analisi eseguita.")
