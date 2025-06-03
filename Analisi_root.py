@@ -53,6 +53,32 @@ def process_file_diffs(filepath):
     }
     return diffs
 
+def plot_title(nomefile, tipo):
+    suffix = {
+        "all": "",
+        "up": " - eventi up",
+        "dawn": " - eventi down"
+    }.get(tipo)
+
+    titoli = {
+        "Sale_test": "Vita media nel Sale",
+        "test_alluminio": "Vita media nell'alluminio",
+        "Pasquatot": "Vita media del muone",
+        "Pasqua": "Vita media del muone",
+        "Invertito_5000": "Vita media con rivelatori invertiti",
+        "SolenoideSpento": "Vita media nel solenoide spento",
+        "SolenoideAcceso": "Asimmetria con campo magnetico"
+    }
+
+    titolo = titoli.get(nomefile)
+    if titolo:
+        if suffix:
+            return titolo + suffix 
+        else:
+            return titolo
+    else:
+        return 0
+
 # Funzione di plotting e fitting con ROOT
 def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit):
     bins      = bin_dict[tipo]['bins']
@@ -60,7 +86,12 @@ def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit):
     x_max     = max(diff) * 1.1
 
     # Istogramma ROOT
-    hist = ROOT.TH1F(f"hist_{tipo}", f"Fit {tipo} - {nomefile}", bins, 0, x_max)
+    titolo = plot_title(nomefile, tipo)
+    print(titolo)
+    if titolo:
+        hist = ROOT.TH1F(f"hist_{tipo}", titolo, bins, 0, x_max)
+    else:
+        hist = ROOT.TH1F(f"hist_{tipo}", f"Fit {tipo} - {nomefile}", bins, 0, x_max)
     for val in diff:
         hist.Fill(val)
 
@@ -73,20 +104,20 @@ def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit):
     fit_3p.SetParLimits(1, fit_params_limit['#tau_{free}_inf'], fit_params_limit['#tau_{free}_sup'])
 
     fit_5p_NaCl = ROOT.TF1(f"fit5_NaCl_{tipo}", "[0]*exp(-x/[1]) + [2] + [3]*exp(-x/[4])", 0, x_max)
-    fit_5p_NaCl.SetParName(0, "B")
+    fit_5p_NaCl.SetParName(0, "A")
     fit_5p_NaCl.SetParName(1, "#tau_{free}")
-    fit_5p_NaCl.SetParName(2, "A")
-    fit_5p_NaCl.SetParName(3, "C")
+    fit_5p_NaCl.SetParName(2, "C")
+    fit_5p_NaCl.SetParName(3, "B")
     fit_5p_NaCl.SetParName(4, "#tau_{NaCl}")
     fit_5p_NaCl.SetParameters(fit_params['B'], fit_params['#tau_{free}'], fit_params['A'], fit_params['C'], fit_params['#tau_{NaCl}'])
     fit_5p_NaCl.SetParLimits(4, fit_params_limit['#tau_{NaCl}_inf'], fit_params_limit['#tau_{NaCl}_sup'])
     fit_5p_NaCl.SetParLimits(1, fit_params_limit['#tau_{free}_inf'], fit_params_limit['#tau_{free}_sup'])
 
     fit_5p_Al = ROOT.TF1(f"fit5_Al_{tipo}", "[0]*exp(-x/[1]) + [2] + [3]*exp(-x/[4])", 0, x_max)
-    fit_5p_Al.SetParName(0, "B")
+    fit_5p_Al.SetParName(0, "A")
     fit_5p_Al.SetParName(1, "#tau_{free}")
-    fit_5p_Al.SetParName(2, "A")
-    fit_5p_Al.SetParName(3, "C")
+    fit_5p_Al.SetParName(2, "C")
+    fit_5p_Al.SetParName(3, "B")
     fit_5p_Al.SetParName(4, "#tau_{Al}")
     fit_5p_Al.SetParameters(fit_params['B'], fit_params['#tau_{free}'], fit_params['A'], fit_params['C'], fit_params['#tau_{Al}'])
     fit_5p_Al.SetParLimits(4, fit_params_limit['#tau_{Al}_inf'], fit_params_limit['#tau_{Al}_sup'])
@@ -149,7 +180,6 @@ def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit):
     outdir = "./Fina_na_lfile"
     if not os.path.exists(outdir): os.makedirs(outdir)
     c.SaveAs(f"{outdir}/{nomefile}_{tipo}.pdf")
-
 
 # Funzione principale: unisce tutti i file se cartella, o singolo
 def analizza_root(path, bin_dict, fit_params, fit_params_limit, foc, plot_updown, clock):

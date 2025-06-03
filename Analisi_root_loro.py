@@ -84,6 +84,29 @@ def process_file_diffs(filepath):
     }
     return diffs
 
+def plot_title(nomefile, tipo):
+    suffix = {
+        "all": "",
+        "up": " - eventi up",
+        "dawn": " - eventi down"
+    }.get(tipo)
+
+    titoli = {
+        "Sale_loro": "G1: Vita media nel Sale",
+        "Alluminio_loro": "G1: Vita media nell'alluminio",
+        "SolenoideSpento": "Vita media nel solenoide spento",
+        "SolenoideAcceso": "Asimmetria con campo magnetico"
+    }
+
+    titolo = titoli.get(nomefile)
+    if titolo:
+        if suffix:
+            return titolo + suffix 
+        else:
+            return titolo
+    else:
+        return 0
+
 # Funzione di plotting e fitting con ROOT
 def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit):
     bins      = bin_dict[tipo]['bins']
@@ -91,7 +114,11 @@ def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit):
     x_max     = max(diff)
 
     # Istogramma ROOT
-    hist = ROOT.TH1F(f"hist_{tipo}", f"Fit {tipo} - {nomefile}", bins, 0, x_max)
+    titolo = plot_title(nomefile, tipo)
+    if titolo:
+        hist = ROOT.TH1F(f"hist_{tipo}", titolo, bins, 0, x_max)
+    else:
+        hist = ROOT.TH1F(f"hist_{tipo}", f"Fit {tipo} - {nomefile}", bins, 0, x_max)
     for val in diff:
         hist.Fill(val)
 
@@ -125,7 +152,7 @@ def plot_e_fit(diff, tipo, nomefile, bin_dict, fit_params, fit_params_limit):
 
     # Disegna su canvas
     c = ROOT.TCanvas(f"c_{tipo}", f"Fit {tipo}", 800, 600)
-    hist.GetXaxis().SetTitle("Tempo [ns]")
+    hist.GetXaxis().SetTitle("Time [ns]")
     hist.GetYaxis().SetTitle("Counts")
     hist.SetFillColorAlpha(ROOT.kBlue-7, 0.35)
     hist.Draw("HIST")
