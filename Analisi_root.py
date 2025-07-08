@@ -53,6 +53,7 @@ def process_file_diffs(filepath):
     }
     return diffs
 
+# Modifica i titoli dei plot in base ai miei nomi (personalizzabile)
 def plot_title(nomefile, tipo):
     suffix = {
         "all": "",
